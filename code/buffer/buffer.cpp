@@ -1,9 +1,4 @@
-/*
- * @Author       : mark
- * @Date         : 2020-06-26
- * @copyleft Apache 2.0
- */ 
-#include "buffer.h"
+ #include "buffer.h"
 
 Buffer::Buffer(int initBuffSize) : buffer_(initBuffSize), readPos_(0), writePos_(0) {}
 
@@ -31,7 +26,9 @@ void Buffer::RetrieveUntil(const char* end) {
     assert(Peek() <= end );
     Retrieve(end - Peek());
 }
-
+/*
+    功能：恢复缓冲区默认状态
+*/
 void Buffer::RetrieveAll() {
     bzero(&buffer_[0], buffer_.size());
     readPos_ = 0;
@@ -76,7 +73,9 @@ void Buffer::Append(const Buffer& buff) {
     Append(buff.Peek(), buff.ReadableBytes());
 }
 
+// 判断是否可写
 void Buffer::EnsureWriteable(size_t len) {
+    // 如果可写字节数小于len，创建新的空间
     if(WritableBytes() < len) {
         MakeSpace_(len);
     }
@@ -84,23 +83,28 @@ void Buffer::EnsureWriteable(size_t len) {
 }
 
 ssize_t Buffer::ReadFd(int fd, int* saveErrno) {
-    char buff[65535];
-    struct iovec iov[2];
+    char buff[65535]; // 临时数组，保证能够把所有数据都读出来
+    struct iovec iov[2]; // 定义用于分散读的结构体数组iov
     const size_t writable = WritableBytes();
     /* 分散读， 保证数据全部读完 */
-    iov[0].iov_base = BeginPtr_() + writePos_;
-    iov[0].iov_len = writable;
-    iov[1].iov_base = buff;
+    iov[0].iov_base = BeginPtr_() + writePos_; // 第一块内存的地址
+    iov[0].iov_len = writable; // buff的剩余空间
+    iov[1].iov_base = buff; // 第二块内存的地址
     iov[1].iov_len = sizeof(buff);
 
-    const ssize_t len = readv(fd, iov, 2);
+    const ssize_t len = readv(fd, iov, 2); // readv分散读，2指有两块内存
+    // 出错了
     if(len < 0) {
         *saveErrno = errno;
     }
+    // 读取到的数据长度小于可写的字节数
     else if(static_cast<size_t>(len) <= writable) {
+        // 将writepos往后移len个长度
         writePos_ += len;
     }
+    // 第一块内存装不下
     else {
+        // 把剩下的部分装到buff里去
         writePos_ = buffer_.size();
         Append(buff, len - writable);
     }
@@ -127,7 +131,9 @@ const char* Buffer::BeginPtr_() const {
 }
 
 void Buffer::MakeSpace_(size_t len) {
+    // 当前可写的字节数 + 可追加的字节数 < len
     if(WritableBytes() + PrependableBytes() < len) {
+        // 扩容
         buffer_.resize(writePos_ + len + 1);
     } 
     else {
