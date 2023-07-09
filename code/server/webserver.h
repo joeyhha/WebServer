@@ -1,8 +1,3 @@
-/*
- * @Author       : mark
- * @Date         : 2020-06-17
- * @copyleft Apache 2.0
- */ 
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
@@ -18,12 +13,14 @@
 #include "epoller.h"
 #include "../log/log.h"
 #include "../timer/heaptimer.h"
+// #include "../timer/rbtimer.h"
+// #include "../timer/skiplisttimer.h"
 #include "../pool/sqlconnpool.h"
 #include "../pool/threadpool.h"
 #include "../pool/sqlconnRAII.h"
 #include "../http/httpconn.h"
 
-class WebServer {
+class  WebServer {
 public:
     WebServer(
         int port, int trigMode, int timeoutMS, bool OptLinger, 
@@ -51,24 +48,25 @@ private:
     void OnWrite_(HttpConn* client);
     void OnProcess(HttpConn* client);
 
-    static const int MAX_FD = 65536;
+    static const int MAX_FD = 65536; // 最大的文件描述符个数
 
-    static int SetFdNonblock(int fd);
+    static int SetFdNonblock(int fd);  // 设置文件描述符非阻塞
 
-    int port_;
-    bool openLinger_;
-    int timeoutMS_;  /* 毫秒MS */
-    bool isClose_;
-    int listenFd_;
-    char* srcDir_;
+    int port_;          // 端口
+    bool openLinger_;   //是否优雅关闭
+    int timeoutMS_;     /* 毫秒MS */
+    bool isClose_;      // 是否关闭
+    int listenFd_;      // 监听的文件描述符
+    char* srcDir_;      // 资源目录
     
-    uint32_t listenEvent_;
-    uint32_t connEvent_;
+    uint32_t listenEvent_;  // 监听的文件描述符的事件
+    uint32_t connEvent_;    // 连接的文件描述符的事件
    
-    std::unique_ptr<HeapTimer> timer_;
-    std::unique_ptr<ThreadPool> threadpool_;
-    std::unique_ptr<Epoller> epoller_;
-    std::unordered_map<int, HttpConn> users_;
+    // std::unique_ptr<HeapTimer> timer_;          // 定时器
+    std::unique_ptr<HeapTimer> timer_;      // 跳表实现的定时器
+    std::unique_ptr<ThreadPool> threadpool_;    // 线程池
+    std::unique_ptr<Epoller> epoller_;          // epoll对象
+    std::unordered_map<int, HttpConn> users_;   // 保存客户端连接的信息
 };
 
 
