@@ -1,13 +1,8 @@
-/*
- * @Author       : mark
- * @Date         : 2020-06-15
- * @copyleft Apache 2.0
- */ 
 #include "httpconn.h"
 using namespace std;
 
-const char* HttpConn::srcDir;
-std::atomic<int> HttpConn::userCount;
+const char* HttpConn::srcDir; // 资源目录
+std::atomic<int> HttpConn::userCount; // atomic：设置userCount为原子变量，保证执行操作时不会被其他线程干扰
 bool HttpConn::isET;
 
 HttpConn::HttpConn() { 
@@ -20,6 +15,7 @@ HttpConn::~HttpConn() {
     Close(); 
 };
 
+// 初始化http连接
 void HttpConn::init(int fd, const sockaddr_in& addr) {
     assert(fd > 0);
     userCount++;
@@ -31,7 +27,9 @@ void HttpConn::init(int fd, const sockaddr_in& addr) {
     LOG_INFO("Client[%d](%s:%d) in, userCount:%d", fd_, GetIP(), GetPort(), (int)userCount);
 }
 
+// 关闭http连接
 void HttpConn::Close() {
+    // 内存释放
     response_.UnmapFile();
     if(isClose_ == false){
         isClose_ = true; 
@@ -57,20 +55,22 @@ int HttpConn::GetPort() const {
     return addr_.sin_port;
 }
 
-ssize_t HttpConn::read(int* saveErrno) {
+ssize_t HttpConn::read(int* saveErrno) { 
     ssize_t len = -1;
+    // 是ET模式，则循环将内容读出
     do {
-        len = readBuff_.ReadFd(fd_, saveErrno);
+        len = readBuff_.ReadFd(fd_, saveErrno); // 将数据读到readbuff封装的缓冲区
         if (len <= 0) {
             break;
         }
-    } while (isET);
-    return len;
+    } while (isET); // 是ET模式则循环读取，否则只读一次
+    return len; // 返回读到的字节数，如果是ET模式并且循环读了，最后返回的不是完整的字节数
 }
 
 ssize_t HttpConn::write(int* saveErrno) {
     ssize_t len = -1;
     do {
+        // 分散写
         len = writev(fd_, iov_, iovCnt_);
         if(len <= 0) {
             *saveErrno = errno;
@@ -90,18 +90,24 @@ ssize_t HttpConn::write(int* saveErrno) {
             iov_[0].iov_len -= len; 
             writeBuff_.Retrieve(len);
         }
-    } while(isET || ToWriteBytes() > 10240);
+    } while(isET || ToWriteBytes() > 10240);// 若是ET模式 或者要写入的字节数大于一次分散写最大字节，循环
     return len;
 }
-
+// 一个连接对应一对请求和响应
 bool HttpConn::process() {
-    request_.Init();
+    // 初始化请求
+    request_.Init(); 
+    // 若可读字节数小于等于0，返回失败
     if(readBuff_.ReadableBytes() <= 0) {
         return false;
     }
+    // 若解析数据成功
     else if(request_.parse(readBuff_)) {
+        // 记录日志
         LOG_DEBUG("%s", request_.path().c_str());
+        // 初始化响应，200代表正常响应
         response_.Init(srcDir, request_.path(), request_.IsKeepAlive(), 200);
+    // 否则初始化错误响应，400 Bad Request
     } else {
         response_.Init(srcDir, request_.path(), false, 400);
     }
